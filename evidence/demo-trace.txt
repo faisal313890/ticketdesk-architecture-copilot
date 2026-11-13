@@ -1,0 +1,63 @@
+Snapshot: 53353f52eefe1fdb81e4803d099000267fb3100f
+The ticket router applies require_token before handling the request. [C1] [C2]
+
+The POST handler calls submit_ticket, which trims the title and delegates to insert_ticket. [C3] [C4]
+
+The repository uses a parameterized INSERT, sets status to open, and executes the insert through run_db. [C5] [C6]
+
+[C1] app/routes.py:11-11
+  11 | router = APIRouter(prefix="/api/tickets", dependencies=[Depends(require_token)])
+
+[C2] app/auth.py:9-16
+   9 | def require_token(authorization: str | None = Header(default=None)) -> None:
+  10 |     """Reject a missing, malformed or incorrect Bearer token."""
+  11 |     scheme, _, token = (authorization or "").partition(" ")
+  12 |     valid = scheme.lower() == "bearer" and compare_digest(
+  13 |         token.encode("utf-8"), SETTINGS.demo_token.encode("utf-8")
+  14 |     )
+  15 |     if not valid:
+  16 |         raise HTTPException(401, "Invalid bearer token", headers={"WWW-Authenticate": "Bearer"})
+
+[C3] app/routes.py:14-20
+  14 | @router.post("", response_model=Ticket, status_code=201)
+  15 | def create_ticket(data: TicketCreate) -> Ticket:
+  16 |     """Create a ticket and translate invalid titles to HTTP 422."""
+  17 |     try:
+  18 |         return submit_ticket(data)
+  19 |     except InvalidTitle as exc:
+  20 |         raise HTTPException(422, str(exc)) from exc
+
+[C4] app/service.py:10-15
+  10 | def submit_ticket(data: TicketCreate) -> Ticket:
+  11 |     """Trim the title before applying the minimum-length rule."""
+  12 |     title = data.title.strip()
+  13 |     if len(title) < 5:
+  14 |         raise InvalidTitle("Title needs at least five characters after trimming")
+  15 |     return insert_ticket(data.model_copy(update={"title": title}))
+
+[C5] app/repository.py:6-15
+   6 | def insert_ticket(data: TicketCreate) -> Ticket:
+   7 |     """Insert a new ticket with open status and return its record."""
+   8 |     def insert(db):
+   9 |         cur = db.execute(
+  10 |             "INSERT INTO tickets (title, priority, status) VALUES (?, ?, ?)",
+  11 |             (data.title, data.priority, "open"),
+  12 |         )
+  13 |         return Ticket(id=cur.lastrowid, title=data.title, priority=data.priority, status="open")
+  14 | 
+  15 |     return run_db(insert)
+
+[C6] app/db.py:13-25
+  13 | def run_db(operation: Callable[[sqlite3.Connection], T]) -> T:
+  14 |     """Run each attempt in a fresh transaction and retry only lock errors."""
+  15 |     for attempt in range(SETTINGS.db_attempts):
+  16 |         try:
+  17 |             with closing(sqlite3.connect(SETTINGS.db_path, timeout=0)) as db:
+  18 |                 db.row_factory = sqlite3.Row
+  19 |                 with db:
+  20 |                     return operation(db)
+  21 |         except sqlite3.OperationalError as exc:
+  22 |             if "locked" not in str(exc).lower() or attempt + 1 == SETTINGS.db_attempts:
+  23 |                 raise
+  24 |             time.sleep(SETTINGS.retry_base_seconds * (2 ** attempt))
+  25 |     raise RuntimeError("At least one database attempt is required")

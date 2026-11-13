@@ -1,0 +1,409 @@
+[
+  {
+    "case": "Q01",
+    "question": "Where is the authentication token validated, and what happens when it is missing or invalid?",
+    "expected": "answered",
+    "required_facts": "Ticket router requires the dependency. It checks Bearer and compares the token to the configured value; failure is 401.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "The ticket router applies require_token as a dependency. [C1]\n\nThe dependency checks the Bearer scheme and compares the supplied token with the configured token. Missing or invalid credentials return HTTP 401. [C2]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "app.routes.router",
+          "file_path": "app/routes.py"
+        },
+        {
+          "qualified_name": "app.auth.require_token",
+          "file_path": "app/auth.py"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "app/routes.py",
+          "start_line": 11,
+          "end_line": 11,
+          "code_snippet": "router = APIRouter(prefix=\"/api/tickets\", dependencies=[Depends(require_token)])"
+        },
+        {
+          "id": "C2",
+          "file_path": "app/auth.py",
+          "start_line": 9,
+          "end_line": 16,
+          "code_snippet": "def require_token(authorization: str | None = Header(default=None)) -> None:\n    \"\"\"Reject a missing, malformed or incorrect Bearer token.\"\"\"\n    scheme, _, token = (authorization or \"\").partition(\" \")\n    valid = scheme.lower() == \"bearer\" and compare_digest(\n        token.encode(\"utf-8\"), SETTINGS.demo_token.encode(\"utf-8\")\n    )\n    if not valid:\n        raise HTTPException(401, \"Invalid bearer token\", headers={\"WWW-Authenticate\": \"Bearer\"})"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q02",
+    "question": "How does database retry work when SQLite is locked?",
+    "expected": "answered",
+    "required_facts": "Fresh connection and transaction per attempt; only lock-related OperationalError is retried; three attempts total; delays 50 ms then 100 ms; final or unrelated errors propagate.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "run_db opens a fresh SQLite connection and transaction on each attempt. It retries only OperationalError messages containing 'locked'; unrelated errors and a final failed attempt propagate. [C1]\n\nThe defaults allow three attempts. The retry delay doubles from 50 ms to 100 ms. [C1] [C2]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "app.db.run_db",
+          "file_path": "app/db.py"
+        },
+        {
+          "qualified_name": "app.config.Settings",
+          "file_path": "app/config.py"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "app/db.py",
+          "start_line": 13,
+          "end_line": 25,
+          "code_snippet": "def run_db(operation: Callable[[sqlite3.Connection], T]) -> T:\n    \"\"\"Run each attempt in a fresh transaction and retry only lock errors.\"\"\"\n    for attempt in range(SETTINGS.db_attempts):\n        try:\n            with closing(sqlite3.connect(SETTINGS.db_path, timeout=0)) as db:\n                db.row_factory = sqlite3.Row\n                with db:\n                    return operation(db)\n        except sqlite3.OperationalError as exc:\n            if \"locked\" not in str(exc).lower() or attempt + 1 == SETTINGS.db_attempts:\n                raise\n            time.sleep(SETTINGS.retry_base_seconds * (2 ** attempt))\n    raise RuntimeError(\"At least one database attempt is required\")"
+        },
+        {
+          "id": "C2",
+          "file_path": "app/config.py",
+          "start_line": 7,
+          "end_line": 14,
+          "code_snippet": "@dataclass(frozen=True)\nclass Settings:\n    \"\"\"Local storage, authentication and retry settings.\"\"\"\n\n    db_path: str = field(default_factory=lambda: os.getenv(\"TICKET_DB\", \"tickets.sqlite3\"))\n    demo_token: str = field(default_factory=lambda: os.getenv(\"TICKET_TOKEN\") or secrets.token_urlsafe(24))\n    db_attempts: int = 3\n    retry_base_seconds: float = 0.05"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q03",
+    "question": "What happens to a ticket title that is too short after whitespace is trimmed?",
+    "expected": "answered",
+    "required_facts": "The service strips whitespace and rejects fewer than five characters; the POST handler converts InvalidTitle to 422.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "The service strips whitespace and rejects titles under five characters. [C1]\n\nThe POST handler maps InvalidTitle to HTTP 422. [C2]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "app.service.submit_ticket",
+          "file_path": "app/service.py"
+        },
+        {
+          "qualified_name": "app.routes.create_ticket",
+          "file_path": "app/routes.py"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "app/service.py",
+          "start_line": 10,
+          "end_line": 15,
+          "code_snippet": "def submit_ticket(data: TicketCreate) -> Ticket:\n    \"\"\"Trim the title before applying the minimum-length rule.\"\"\"\n    title = data.title.strip()\n    if len(title) < 5:\n        raise InvalidTitle(\"Title needs at least five characters after trimming\")\n    return insert_ticket(data.model_copy(update={\"title\": title}))"
+        },
+        {
+          "id": "C2",
+          "file_path": "app/routes.py",
+          "start_line": 14,
+          "end_line": 20,
+          "code_snippet": "@router.post(\"\", response_model=Ticket, status_code=201)\ndef create_ticket(data: TicketCreate) -> Ticket:\n    \"\"\"Create a ticket and translate invalid titles to HTTP 422.\"\"\"\n    try:\n        return submit_ticket(data)\n    except InvalidTitle as exc:\n        raise HTTPException(422, str(exc)) from exc"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q04",
+    "question": "Trace a ticket creation request from the POST endpoint to storage. What status does the new ticket get?",
+    "expected": "answered",
+    "required_facts": "POST returns 201; handler delegates to submit_ticket, then insert_ticket; INSERT is parameterized and sets ticket status to open.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "The ticket POST handler returns HTTP 201 and calls submit_ticket, which trims the title and delegates to insert_ticket. [C1] [C2]\n\ninsert_ticket uses a parameterized INSERT and stores the new ticket with status open. [C3]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "app.routes.create_ticket",
+          "file_path": "app/routes.py"
+        },
+        {
+          "qualified_name": "app.service.submit_ticket",
+          "file_path": "app/service.py"
+        },
+        {
+          "qualified_name": "app.repository.insert_ticket",
+          "file_path": "app/repository.py"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "app/routes.py",
+          "start_line": 14,
+          "end_line": 20,
+          "code_snippet": "@router.post(\"\", response_model=Ticket, status_code=201)\ndef create_ticket(data: TicketCreate) -> Ticket:\n    \"\"\"Create a ticket and translate invalid titles to HTTP 422.\"\"\"\n    try:\n        return submit_ticket(data)\n    except InvalidTitle as exc:\n        raise HTTPException(422, str(exc)) from exc"
+        },
+        {
+          "id": "C2",
+          "file_path": "app/service.py",
+          "start_line": 10,
+          "end_line": 15,
+          "code_snippet": "def submit_ticket(data: TicketCreate) -> Ticket:\n    \"\"\"Trim the title before applying the minimum-length rule.\"\"\"\n    title = data.title.strip()\n    if len(title) < 5:\n        raise InvalidTitle(\"Title needs at least five characters after trimming\")\n    return insert_ticket(data.model_copy(update={\"title\": title}))"
+        },
+        {
+          "id": "C3",
+          "file_path": "app/repository.py",
+          "start_line": 6,
+          "end_line": 15,
+          "code_snippet": "def insert_ticket(data: TicketCreate) -> Ticket:\n    \"\"\"Insert a new ticket with open status and return its record.\"\"\"\n    def insert(db):\n        cur = db.execute(\n            \"INSERT INTO tickets (title, priority, status) VALUES (?, ?, ?)\",\n            (data.title, data.priority, \"open\"),\n        )\n        return Ticket(id=cur.lastrowid, title=data.title, priority=data.priority, status=\"open\")\n\n    return run_db(insert)"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q05",
+    "question": "How is the ticket listing filtered and ordered?",
+    "expected": "answered",
+    "required_facts": "GET accepts optional open/closed status; repository adds a bound WHERE parameter only when a filter is supplied and sorts by descending ID.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "The GET handler accepts an optional open or closed status. [C1]\n\nThe repository adds a bound WHERE parameter only when a status is supplied and sorts by descending ID. [C2]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "app.routes.list_tickets",
+          "file_path": "app/routes.py"
+        },
+        {
+          "qualified_name": "app.repository.read_tickets",
+          "file_path": "app/repository.py"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "app/routes.py",
+          "start_line": 23,
+          "end_line": 26,
+          "code_snippet": "@router.get(\"\", response_model=list[Ticket])\ndef list_tickets(status: Literal[\"open\", \"closed\"] | None = None) -> list[Ticket]:\n    \"\"\"List all tickets, or filter by an accepted status.\"\"\"\n    return read_tickets(status)"
+        },
+        {
+          "id": "C2",
+          "file_path": "app/repository.py",
+          "start_line": 18,
+          "end_line": 28,
+          "code_snippet": "def read_tickets(status: str | None) -> list[Ticket]:\n    \"\"\"Return newest first, optionally restricted to one status.\"\"\"\n    def select(db):\n        query = \"SELECT id, title, priority, status FROM tickets\"\n        params = ()\n        if status is not None:\n            query += \" WHERE status = ?\"\n            params = (status,)\n        return [Ticket(**dict(row)) for row in db.execute(query + \" ORDER BY id DESC\", params)]\n\n    return run_db(select)"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q06",
+    "question": "Where and when is the SQLite schema initialized?",
+    "expected": "answered",
+    "required_facts": "FastAPI registers lifespan, which calls init_db before yielding; init_db creates the tickets table if missing.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "FastAPI registers a lifespan hook that calls init_db before it yields. [C1] [C2]\n\ninit_db creates the tickets table if it does not already exist. [C3]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "app.main.lifespan",
+          "file_path": "app/main.py"
+        },
+        {
+          "qualified_name": "app.main.app",
+          "file_path": "app/main.py"
+        },
+        {
+          "qualified_name": "app.db.init_db",
+          "file_path": "app/db.py"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "app/main.py",
+          "start_line": 13,
+          "end_line": 17,
+          "code_snippet": "@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    \"\"\"Initialize the database before serving requests.\"\"\"\n    init_db()\n    yield"
+        },
+        {
+          "id": "C2",
+          "file_path": "app/main.py",
+          "start_line": 20,
+          "end_line": 20,
+          "code_snippet": "app = FastAPI(title=\"TicketDesk\", lifespan=lifespan)"
+        },
+        {
+          "id": "C3",
+          "file_path": "app/db.py",
+          "start_line": 28,
+          "end_line": 34,
+          "code_snippet": "def init_db() -> None:\n    \"\"\"Create the ticket table if it is missing.\"\"\"\n    run_db(lambda db: db.execute(\n        \"CREATE TABLE IF NOT EXISTS tickets \"\n        \"(id INTEGER PRIMARY KEY, title TEXT NOT NULL, \"\n        \"priority TEXT NOT NULL, status TEXT NOT NULL)\"\n    ))"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q07",
+    "question": "How does the browser send the demo token when creating a ticket?",
+    "expected": "answered",
+    "required_facts": "Submit handler passes token.value to ticketRequest with POST and a JSON body; ticketRequest sends it as Authorization: Bearer to /api/tickets.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "The submit handler passes token.value and a POST with a JSON body to ticketRequest. [C1]\n\nticketRequest sends the token in the Authorization: Bearer header to /api/tickets. [C2]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "web.app.submitHandler",
+          "file_path": "web/app.js"
+        },
+        {
+          "qualified_name": "web.api.ticketRequest",
+          "file_path": "web/api.js"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "web/app.js",
+          "start_line": 22,
+          "end_line": 32,
+          "code_snippet": "document.querySelector(\"#new-ticket\").addEventListener(\"submit\", event => {\n  event.preventDefault();\n  run(async () => {\n    await ticketRequest(token.value, {\n      method: \"POST\",\n      body: JSON.stringify(Object.fromEntries(new FormData(event.target))),\n    });\n    event.target.reset();\n    await refreshTickets();\n  });\n});"
+        },
+        {
+          "id": "C2",
+          "file_path": "web/api.js",
+          "start_line": 2,
+          "end_line": 12,
+          "code_snippet": "export async function ticketRequest(token, options = {}) {\n  const response = await fetch(\"/api/tickets\", {\n    ...options,\n    headers: {\n      Authorization: `Bearer ${token}`,\n      \"Content-Type\": \"application/json\",\n    },\n  });\n  if (!response.ok) throw new Error(`Request failed (HTTP ${response.status})`);\n  return response.json();\n}"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q08",
+    "question": "Does the health endpoint verify the database connection?",
+    "expected": "answered",
+    "required_facts": "No. GET /health returns a static ok response without checking dependencies.",
+    "http_status": 200,
+    "generation_called": true,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "answered",
+      "answer": "No. GET /health returns a static ok response and does not check dependencies. [C1]",
+      "referenced_symbols": [
+        {
+          "qualified_name": "app.health.health",
+          "file_path": "app/health.py"
+        }
+      ],
+      "citations": [
+        {
+          "id": "C1",
+          "file_path": "app/health.py",
+          "start_line": 7,
+          "end_line": 10,
+          "code_snippet": "@router.get(\"/health\")\ndef health() -> dict[str, str]:\n    \"\"\"Report that the API is responding, without checking dependencies.\"\"\"\n    return {\"status\": \"ok\"}"
+        }
+      ],
+      "confidence_score": 0.9,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": []
+    }
+  },
+  {
+    "case": "Q09",
+    "question": "How are Stripe payments processed, and where are payment webhooks verified?",
+    "expected": "insufficient_evidence",
+    "required_facts": "Abstain. The snapshot supplies no payment implementation or webhook verification details.",
+    "http_status": 200,
+    "generation_called": false,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "insufficient_evidence",
+      "answer": "No matching implementation found in codebase. This feature is not present.",
+      "referenced_symbols": [],
+      "citations": [],
+      "confidence_score": 0,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": [
+        "No supported topic and matching source evidence were found for the full question."
+      ]
+    }
+  },
+  {
+    "case": "Q10",
+    "question": "How are Okta groups mapped to application roles during SSO?",
+    "expected": "insufficient_evidence",
+    "required_facts": "Abstain. Local demo-token validation does not establish Okta integration or group-to-role mapping.",
+    "http_status": 200,
+    "generation_called": false,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "insufficient_evidence",
+      "answer": "No matching implementation found in codebase. This feature is not present.",
+      "referenced_symbols": [],
+      "citations": [],
+      "confidence_score": 0,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": [
+        "No supported topic and matching source evidence were found for the full question."
+      ]
+    }
+  }
+]

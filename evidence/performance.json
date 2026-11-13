@@ -1,0 +1,15 @@
+{
+  "repeats_per_startup": 12,
+  "shared_questions": 6,
+  "repeated_query_rounds": 200,
+  "previous_startup_ms": 39.756,
+  "updated_uncached_startup_ms": 8.83,
+  "updated_cold_cache_startup_ms": 9.109,
+  "updated_warm_cache_startup_ms": 3.936,
+  "previous_retained_python_bytes": 55251,
+  "updated_retained_python_bytes": 51186,
+  "previous_warm_qa_us": 52.63,
+  "updated_warm_qa_us": 23.13,
+  "updated_full_benchmark_warm_qa_us": 24.08,
+  "warm_cache_bytes": 28672
+}

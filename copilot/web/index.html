@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TicketDesk Architecture Copilot</title>
+<link rel="stylesheet" href="/styles.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<main>
+<header><p class="eyebrow">TICKETDESK / LOCAL REPOSITORY</p>
+<h1>Architecture Copilot</h1>
+<p>Ask about the TicketDesk backend. Open any citation to verify its source lines.</p></header>
+<form id="search">
+<label for="query">Developer question</label>
+<div class="search-row"><input id="query" required maxlength="500" placeholder="Where is the authentication token validated?"><button type="submit">Search code</button></div>
+</form>
+<p id="state" role="status"></p>
+<section id="result" hidden aria-label="Answer">
+<div class="result-top"><span id="badge"></span><span id="commit"></span></div>
+<h2>Technical answer</h2>
+<div id="answer"></div>
+<p id="scope"></p>
+<div id="sources"></div>
+</section>
+</main>
+</body>
+</html>

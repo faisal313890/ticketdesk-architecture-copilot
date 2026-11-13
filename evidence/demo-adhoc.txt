@@ -1,0 +1,17 @@
+Snapshot: 53353f52eefe1fdb81e4803d099000267fb3100f
+The ticket router applies require_token as a dependency. [C1]
+
+The dependency checks the Bearer scheme and compares the supplied token with the configured token. Missing or invalid credentials return HTTP 401. [C2]
+
+[C1] app/routes.py:11-11
+  11 | router = APIRouter(prefix="/api/tickets", dependencies=[Depends(require_token)])
+
+[C2] app/auth.py:9-16
+   9 | def require_token(authorization: str | None = Header(default=None)) -> None:
+  10 |     """Reject a missing, malformed or incorrect Bearer token."""
+  11 |     scheme, _, token = (authorization or "").partition(" ")
+  12 |     valid = scheme.lower() == "bearer" and compare_digest(
+  13 |         token.encode("utf-8"), SETTINGS.demo_token.encode("utf-8")
+  14 |     )
+  15 |     if not valid:
+  16 |         raise HTTPException(401, "Invalid bearer token", headers={"WWW-Authenticate": "Bearer"})

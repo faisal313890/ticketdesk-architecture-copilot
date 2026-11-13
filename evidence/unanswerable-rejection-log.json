@@ -1,0 +1,46 @@
+[
+  {
+    "case": "Q09",
+    "question": "How are Stripe payments processed, and where are payment webhooks verified?",
+    "expected": "insufficient_evidence",
+    "required_facts": "Abstain. The snapshot supplies no payment implementation or webhook verification details.",
+    "http_status": 200,
+    "generation_called": false,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "insufficient_evidence",
+      "answer": "No matching implementation found in codebase. This feature is not present.",
+      "referenced_symbols": [],
+      "citations": [],
+      "confidence_score": 0,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": [
+        "No supported topic and matching source evidence were found for the full question."
+      ]
+    }
+  },
+  {
+    "case": "Q10",
+    "question": "How are Okta groups mapped to application roles during SSO?",
+    "expected": "insufficient_evidence",
+    "required_facts": "Abstain. Local demo-token validation does not establish Okta integration or group-to-role mapping.",
+    "http_status": 200,
+    "generation_called": false,
+    "response": {
+      "snapshot_commit": "53353f52eefe1fdb81e4803d099000267fb3100f",
+      "status": "insufficient_evidence",
+      "answer": "No matching implementation found in codebase. This feature is not present.",
+      "referenced_symbols": [],
+      "citations": [],
+      "confidence_score": 0,
+      "limitations": [
+        "Only the configured TicketDesk topics are covered. A rejection is limited to this scope."
+      ],
+      "missing_context": [
+        "No supported topic and matching source evidence were found for the full question."
+      ]
+    }
+  }
+]
